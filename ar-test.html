@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zappar AR Test</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        
+        #zappar-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        
+        #status {
+            position: absolute;
+            top: 20px;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            background-color: rgba(255, 255, 255, 0.7);
+            padding: 10px;
+            z-index: 100;
+        }
+        
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            z-index: 100;
+        }
+        
+        button {
+            background-color: #e60000;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 0 10px;
+            border-radius: 20px;
+            font-size: 16px;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
+    <script src="https://cdn.zappar.com/zappar-threejs/zappar-threejs.min.js"></script>
+</head>
+<body>
+    <div id="zappar-container"></div>
+    <div id="status">Initializing AR test...</div>
+    <div id="controls">
+        <button id="place-cube">Place Cube</button>
+    </div>
+
+    <script>
+        // Status element for logging
+        const statusElement = document.getElementById('status');
+        const placeCubeButton = document.getElementById('place-cube');
+        
+        // Log function to update status
+        function log(message) {
+            console.log(message);
+            statusElement.textContent = message;
+        }
+        
+        // Initialize Three.js
+        log("Setting up Three.js...");
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.getElementById('zappar-container').appendChild(renderer.domElement);
+        
+        // Create scene
+        const scene = new THREE.Scene();
+        
+        // Add lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+        scene.add(ambientLight);
+        
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(0, 10, 0);
+        scene.add(directionalLight);
+        
+        try {
+            // Initialize Zappar camera
+            log("Initializing Zappar...");
+            ZapparThree.glContextSet(ZapparThree.browserIncompatibleUI());
+            
+            const camera = new ZapparThree.Camera();
+            scene.background = camera.backgroundTexture;
+            
+            // Request camera permissions
+            log("Requesting camera permissions...");
+            ZapparThree.permissionRequestUI().then((granted) => {
+                if (granted) {
+                    log("Camera permission granted. Starting camera...");
+                    camera.start();
+                    log("Camera started. AR ready!");
+                } else {
+                    log("ERROR: Camera permission denied");
+                    ZapparThree.permissionDeniedUI();
+                }
+            }).catch(error => {
+                log("ERROR requesting permissions: " + error.message);
+            });
+            
+            // Setup instant tracker
+            log("Setting up instant tracker...");
+            const instantTracker = new ZapparThree.InstantWorldTracker();
+            const instantTrackerGroup = new ZapparThree.InstantWorldAnchorGroup(camera, instantTracker);
+            scene.add(instantTrackerGroup);
+            
+            // Create a simple cube
+            const cubeGeometry = new THREE.BoxGeometry(1, 1, 1);
+            const cubeMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0xe60000,
+                metalness: 0.3,
+                roughness: 0.4
+            });
+            const cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
+            cube.position.set(0, 0.5, 0);
+            instantTrackerGroup.add(cube);
+            cube.visible = false;
+            
+            // Place cube button
+            let hasPlaced = false;
+            placeCubeButton.addEventListener('click', () => {
+                hasPlaced = true;
+                cube.visible = true;
+                log("Cube placed! AR is working correctly.");
+            });
+            
+            // Handle window resize
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+            
+            // Animation loop
+            function animate() {
+                requestAnimationFrame(animate);
+                
+                // Update camera
+                camera.updateFrame(renderer);
+                
+                // Update tracker if not placed
+                if (!hasPlaced) {
+                    instantTracker.setAnchorPoseFromCameraOffset(0, 0, -5);
+                }
+                
+                // Animate cube
+                if (cube.visible) {
+                    cube.rotation.y += 0.01;
+                    cube.rotation.x += 0.005;
+                }
+                
+                // Render
+                renderer.render(scene, camera);
+            }
+            
+            // Start animation loop
+            log("Starting animation loop...");
+            animate();
+            
+        } catch (error) {
+            log("ERROR: " + error.message);
+            console.error(error);
+        }
+    </script>
+</body>
+</html>
